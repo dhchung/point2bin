@@ -29,6 +29,8 @@
 
 #define PREFIX_PATH "/mnt/DataDisk/"
 
+#include <stdlib.h>
+
 bool data_logging;
 std::string data_prefix = "Stoplogging";
 std::string stop_logging_msg = "Stoplogging";
@@ -133,7 +135,6 @@ void save_pcd(sensor_msgs::PointCloud2 cloud_t,
 
     running_check_test_point[thread_no] = true;
 
-    std::cerr << "Data saved to " << data_path << std::endl;
 
     running_check_test_point[thread_no] = false;
 }
@@ -180,7 +181,12 @@ void lidartest_handle(const sensor_msgs::PointCloud2::ConstPtr & cloud_msg){
                 ++num_running_thread;
             }
         }
-        std::cout<<"running thread"<<num_running_thread<<std::endl;
+
+        std::stringstream ss;
+        ss << dir_lidartest << "/" << cloud_t.header.stamp << ".bin";
+
+        ROS_INFO("[LIDAR TEST] Data saved to %s", ss.str());
+        ROS_INFO("[LIDAR TEST] Running Thread: %d", num_running_thread);
 
     } else {
         
