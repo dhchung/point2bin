@@ -41,9 +41,8 @@ std::vector<std::thread> threads_test_point;
 std::vector<bool> running_check_test_point;
 int thread_test_point_num = 0;
 
-std::vector<std::thread> threads_test_imu;
-std::vector<bool> running_check_test_imu;
-int thread_test_imu_num = 0;
+FILE * imu_file = nullptr;
+
 
 void dataLoggingFlagCallback(const std_msgs::Bool::ConstPtr &msg){
     if(msg->data) {
@@ -77,14 +76,25 @@ void dataPrefixCallBack(const std_msgs::String::ConstPtr & msg) {
             std::cout<<"Prefix changed to logging"<<std::endl;
             data_prefix = msg->data;
             dir_name = PREFIX_PATH + data_prefix + "_lidar";
-            dir_lidartest = dir_name + "/test";
+            std::string dir_lidarnametest = dir_name + "/test";
+            dir_lidartest = dir_lidarnametest + "/points";
+
             mkdir(dir_name.c_str(), 0777);
+            mkdir(dir_lidarnametest.c_str(), 0777);
             mkdir(dir_lidartest.c_str(), 0777);
+            
+            std::string timestampPath = dir_lidarnametest + "/imu.txt";
+            imu_file = fopen(timestampPath.c_str(), "a");
+            if(!imu_file)
+                printf("FAILED to open %s\n", timestampPath.c_str()); 
+
         }
     } else {
         if(data_prefix.compare(stop_logging_msg)!=0) {
             std::cout<<"Prefix changed to stop logging"<<std::endl;
             data_prefix = msg->data;
+            fclose(imu_file);
+
         }
     }
 }
@@ -92,8 +102,6 @@ void dataPrefixCallBack(const std_msgs::String::ConstPtr & msg) {
 void save_pcd(sensor_msgs::PointCloud2 cloud_t,
               std::string data_dir, 
               int thread_no) {
-
-    // data_dir = "/home/morin/test";
 
     std::stringstream ss;
     ss << data_dir << "/" << cloud_t.header.stamp << ".bin";
@@ -140,7 +148,7 @@ void save_pcd(sensor_msgs::PointCloud2 cloud_t,
 }
 
 
-void lidartest_handle(const sensor_msgs::PointCloud2::ConstPtr & cloud_msg){
+void point_test_handle(const sensor_msgs::PointCloud2::ConstPtr & cloud_msg){
     if(data_logging) {
         bool all_thread_running = true;
         int empty_thread = -1;
@@ -185,7 +193,7 @@ void lidartest_handle(const sensor_msgs::PointCloud2::ConstPtr & cloud_msg){
         std::stringstream ss;
         ss << dir_lidartest << "/" << cloud_t.header.stamp << ".bin";
 
-        ROS_INFO("[LIDAR TEST] Data saved to %s", ss.str());
+        ROS_INFO("[LIDAR TEST] Data saved to %s", ss.str().c_str());
         ROS_INFO("[LIDAR TEST] Running Thread: %d", num_running_thread);
 
     } else {
@@ -194,13 +202,41 @@ void lidartest_handle(const sensor_msgs::PointCloud2::ConstPtr & cloud_msg){
 
 }
 
+
+void imu_test_handle(const sensor_msgs::Imu::ConstPtr & imu_msg){
+    if(data_logging) {
+        
+        char imu_data_buf[256];
+
+        sprintf(imu_data_buf, "%0.9f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
+                               imu_msg->header.stamp.now().toSec(),
+                               imu_msg->angular_velocity.x,
+                               imu_msg->angular_velocity.y,
+                               imu_msg->angular_velocity.z,
+                               imu_msg->linear_acceleration.x,
+                               imu_msg->linear_acceleration.y,
+                               imu_msg->linear_acceleration.z,
+                               imu_msg->orientation.w,
+                               imu_msg->orientation.x,
+                               imu_msg->orientation.y,
+                               imu_msg->orientation.z);
+        fwrite(imu_data_buf, 1, strlen(imu_data_buf), imu_file);
+    } else {
+        
+    }
+
+}
+
+
 int main(int argc, char** argv) {
     ros::init(argc, argv, "save_ptcloud");
 
     ros::NodeHandle nh;
     ros::Subscriber sub_bool = nh.subscribe("/datalogging", 1, dataLoggingFlagCallback);
     ros::Subscriber sub_prefix = nh.subscribe("/save_prefix", 1, dataPrefixCallBack);
-    ros::Subscriber sub_pointcloud = nh.subscribe<sensor_msgs::PointCloud2>("/lidar_test/os_cloud_node/points", 1, lidartest_handle);
+    ros::Subscriber sub_pointcloud = nh.subscribe<sensor_msgs::PointCloud2>("/lidar_test/os_cloud_node/points", 1, point_test_handle);
+    ros::Subscriber sub_imu = nh.subscribe<sensor_msgs::Imu>("/lidar_test/os_cloud_node/imu", 1, imu_test_handle);
+
     std::cout<<"[POINTCLOUD SAVE NODE]"<<std::endl;
     std::cout<<"Subscribing to /lidar_test/os_cloud_node/points"<<std::endl;
     std::cout<<"Data save path set to:"<<PREFIX_PATH<<std::endl;
